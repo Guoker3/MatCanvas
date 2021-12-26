@@ -4,6 +4,8 @@ import math
 import copy
 from numpy.random import randint
 
+#the arribute name of class Canvas and class Element shouldn't be same
+
 class ShapeGenerator:
     def __init__(self):
         # the color should be between vacancy and blank
@@ -75,8 +77,8 @@ class ShapeGenerator:
 class Canvas(ShapeGenerator):
     def __init__(self,height,width):
         ShapeGenerator.__init__(self)
-        self.width=width
-        self.height=height
+        self.CanvasWidth=width
+        self.CanvasHeight=height
         self.basemat=None
         self.canvas=None
         self.clean=None
@@ -84,15 +86,14 @@ class Canvas(ShapeGenerator):
 
     #generator the max cubic storage mat
     def prepareBoard(self):
-        self.basemat = np.zeros((self.height+1,self.width))
-        for h in range(self.height):
-            for w in range(self.width):
+        self.basemat = np.zeros((self.CanvasHeight+1,self.CanvasWidth))
+        for h in range(self.CanvasHeight):
+            for w in range(self.CanvasWidth):
                 self.basemat[h][w]=self.blank   #default to be paintful
         #to control and show color reflect in matshow
-        for w in range(self.width):
-            self.basemat[self.height][w]=self.vacancy
-        self.basemat[self.height][self.width-1]=self.blank
-
+        for w in range(self.CanvasWidth):
+            self.basemat[self.CanvasHeight][w]=self.vacancy
+        self.basemat[self.CanvasHeight][self.CanvasWidth-1]=self.blank
         self.canvas=copy.deepcopy(self.basemat)
 
     def tailorCanvas(self,shapeMat,y,x):#start point left-top (x,y)
@@ -100,7 +101,7 @@ class Canvas(ShapeGenerator):
         ww=shapeMat.shape[1]
         for h in range(hh):
             for w in range(ww):
-                if shapeMat[h][w]==self.vacancyPoint and (y+h)<self.height and (x+w)<self.width:
+                if shapeMat[h][w]==self.vacancyPoint and (y+h)<self.CanvasHeight and (x+w)<self.CanvasWidth:
                     self.canvas[y+h][x+w]=self.vacancy
         return (y,x)
 
@@ -110,7 +111,7 @@ class Canvas(ShapeGenerator):
         ww = elementMat.shape[1]
         for h in range(hh):
             for w in range(ww):
-                if elementMat[h][w] != element.blank  and (y + h) < self.height and (x + w) < self.width:
+                if elementMat[h][w] != element.blank  and (y + h) < self.CanvasHeight and (x + w) < self.CanvasWidth:
                     if self.canvas[y + h][x + w]==self.vacancy:
                         print("drop into the vacancy")
                     elif self.canvas[y + h][x + w]!=self.blank:
@@ -131,7 +132,7 @@ class Canvas(ShapeGenerator):
         ww = element.shape[1]
         for h in range(hh):
             for w in range(ww):
-                if element[h][w] != self.vacancyPoint and (y + h) < self.height and (x + w) < self.width:
+                if element[h][w] != self.vacancyPoint and (y + h) < self.CanvasHeight and (x + w) < self.CanvasWidth:
                     self.canvas[y + h][x + w] = self.blank
 
     def generateRandomCanvasForTest(self):
@@ -139,8 +140,8 @@ class Canvas(ShapeGenerator):
         for i in range(randint(2,5)):
             shapes = ["rectangle", "isosceles triangle", "upper triangle", "lower triangle", "ellipse"]
             shapeName = shapes[randint(len(shapes))]
-            dig = self.generateShape(shapeName, randint(self.height/6,self.height/3), randint(self.width/6,self.width/3))
-            self.tailorCanvas(dig, randint(self.height/2),randint(self.width/2))
+            dig = self.generateShape(shapeName, randint(self.CanvasHeight/6,self.CanvasHeight/3), randint(self.CanvasWidth/6,self.CanvasWidth/3))
+            self.tailorCanvas(dig, randint(self.CanvasHeight/2),randint(self.CanvasWidth/2))
 
 
 class Element(ShapeGenerator):
@@ -154,15 +155,17 @@ class Element(ShapeGenerator):
         self.shapeMat=None
         self.height=None
         self.width=None
+        self.shapeName=None
         if type=="default":
             pass
         else:
             raise Exception("ELEMENT for paint TYPE UNKOWN")
-    #def format(self,rawPicture):
-    #    pass
+    def generateElementFromPicture(self,rawPicture):
+        pass
+
     def generateRandomElementForTest(self,canvas):
-        maxHeight=canvas.height
-        maxWidth=canvas.width
+        maxHeight=canvas.CanvasHeight
+        maxWidth=canvas.CanvasWidth
         shapes=["rectangle","isosceles triangle","upper triangle","lower triangle","ellipse"]
         shapeName=shapes[randint(len(shapes))]
         self.height=randint(int(maxHeight/10)+1,int(maxHeight/3)+1)
@@ -177,6 +180,7 @@ class Element(ShapeGenerator):
             for w in range(self.width):
                 if self.shapeMat[h][w]==self.vacancyPoint:
                     self.mat[h][w]=randint(self.vacancy+1,self.blank)
+        self.shapeName=shapeName
 
     def showElement(self,title="element"):
         tempMat = np.zeros((self.height+1,self.width))
@@ -193,23 +197,78 @@ class Element(ShapeGenerator):
 
 class Painter(Canvas,Element):
     def __init__(self,height,width):
-        Canvas.__init__(self,height,width)
         Element.__init__(self)
+        Canvas.__init__(self,height,width)
         self.paintedElementList=list()
         self.waitingPaintList=list()
 
-    def checkIsBlank(self):
-        pass
+    def getRandomMatKernal(self,element):
+        pointList=list()
+        retPointList=list()
+        #count total pixel number
+        for h in element.height:
+            for w in element.width:
+                if element.mat[h][w] != element.blank:
+                    pointList.append((h,w))
+        #pickPoint
+        count=len(pointList)
+        stepNumber=10
+        step=int(count/10)
+        for i in range(stepNumber):
+            retPointList.append(pointList[step*i+randint(step)])
+        return retPointList
 
-    def searchPossibleBlank(self):
-        pass
+    def checkIsBlank(self,element,pos):
+        y=pos[0]
+        x=pos[1]
+        for h in element.height:
+            for w in element.width:
+                if element.mat[h][w]!=element.blank:
+                    if self.canvas[h+y][w+x]!=self.blank:
+                        return False
+        return True
+
+    def searchPossibleBlank(self,element):
+        kernel=self.getRandomMatKernal(element)
+        possiblePosition=list()
+        maxHorizonStep=element.height/5
+        maxVerticalStep=element.width/5
+        y=0
+        x=0
+        while(y+element.height<self.CanvasHeight):
+            while (x+element.width<self.CanvasWidth):
+                flag=True
+                for p in kernel:
+                    if self.canvas[y+p[0]][x+p[1]]!=self.blank:
+                        flag=False
+                if (flag):
+                    possiblePosition.append((y,x))
+                x+=randint(1,maxHorizonStep)
+            y+=randint(1,maxHorizonStep)
+        return possiblePosition
+
 
     def searchRules(self):
         pass
 
-    def pushElement(self,element):
-        self.waitingPaintList.append(element)
+    def comparePosAndRules(self):
+        pass
 
+    def pushElementIndependence(self,element):
+        blankPos=self.searchPossibleBlank()
+        rules
+
+    def searchBlank(self, element):
+        pass
+
+    def pushElementAttach(self,element):
+        pass
+
+    def getElementFeature(self):
+        pass
+
+    def getPositionFeature(self):
+        pass
 
 if __name__ == "__main__":
     #mat = np.arange(64*64).reshape(64, 64)
