@@ -11,6 +11,7 @@ class ShapeGenerator:
         self.vacancy = 0  # black,where out of screen
         self.blank = 256  # white,where is the screen have nothing to show
         self.vacancyPoint = copy.deepcopy(self.vacancy) #where is a point of the generated Shape,can't equal to zero
+        self.pos=None
 
     def generateShape(self,shape,maxHeight,maxWidth,args=None):
         canvas=np.zeros((maxHeight,maxWidth))
@@ -101,7 +102,7 @@ class Canvas(ShapeGenerator):
             for w in range(ww):
                 if shapeMat[h][w]==self.vacancyPoint and (y+h)<self.height and (x+w)<self.width:
                     self.canvas[y+h][x+w]=self.vacancy
-
+        return (y,x)
 
     def paintElement(self,element,y,x):
         elementMat=element.mat
@@ -110,7 +111,12 @@ class Canvas(ShapeGenerator):
         for h in range(hh):
             for w in range(ww):
                 if elementMat[h][w] != element.blank  and (y + h) < self.height and (x + w) < self.width:
-                    self.canvas[y + h][x + w] = elementMat[h][w]
+                    if self.canvas[y + h][x + w]==self.vacancy:
+                        print("drop into the vacancy")
+                    elif self.canvas[y + h][x + w]!=self.blank:
+                        print("cover other element")
+                    else:
+                        self.canvas[y + h][x + w] = elementMat[h][w]
         return (y,x)    #return position to Element sample
 
     def showCanvas(self,title="canvas"):
@@ -118,14 +124,24 @@ class Canvas(ShapeGenerator):
         plt.title(title)
         plt.show()
 
-    def cleanCanvas(self,elementMat):
-        def paintElement(self, elementMat, y, x):
-            hh = elementMat.shape[0]
-            ww = elementMat.shape[1]
-            for h in range(hh):
-                for w in range(ww):
-                    if elementMat[h][w] == self.vacancyPoint and (y + h) < self.height and (x + w) < self.width:
-                        self.canvas[y + h][x + w] = elementMat[h][w]
+    def cleanCanvas(self,element):
+        y=element.pos[0]
+        x=element.pos[1]
+        hh = element.shape[0]
+        ww = element.shape[1]
+        for h in range(hh):
+            for w in range(ww):
+                if element[h][w] != self.vacancyPoint and (y + h) < self.height and (x + w) < self.width:
+                    self.canvas[y + h][x + w] = self.blank
+
+    def generateRandomCanvasForTest(self):
+        self.prepareBoard()
+        for i in range(randint(2,5)):
+            shapes = ["rectangle", "isosceles triangle", "upper triangle", "lower triangle", "ellipse"]
+            shapeName = shapes[randint(len(shapes))]
+            dig = self.generateShape(shapeName, randint(self.height/6,self.height/3), randint(self.width/6,self.width/3))
+            self.tailorCanvas(dig, randint(self.height/2),randint(self.width/2))
+
 
 class Element(ShapeGenerator):
 
@@ -176,7 +192,9 @@ class Element(ShapeGenerator):
         plt.show()
 
 class Painter(Canvas,Element):
-    def __init__(self):
+    def __init__(self,height,width):
+        Canvas.__init__(self,height,width)
+        Element.__init__(self)
         self.paintedElementList=list()
         self.waitingPaintList=list()
 
@@ -189,17 +207,9 @@ class Painter(Canvas,Element):
     def searchRules(self):
         pass
 
-    def pushElement(self):
-        pass
+    def pushElement(self,element):
+        self.waitingPaintList.append(element)
 
-    def removeElement(self):
-        pass
-
-def canvasOne():
-    pass
-
-def canvasTwo():
-    pass
 
 if __name__ == "__main__":
     #mat = np.arange(64*64).reshape(64, 64)
@@ -208,14 +218,13 @@ if __name__ == "__main__":
     #plt.show()
 
     cv=Canvas(160,100)
-    ellipse=cv.generateShape("ellipse",50,30)
-    cv.showShape(ellipse)
-
-    cv.prepareBoard()
+    cv.generateRandomCanvasForTest()
     cv.showCanvas()
-
-    cv.tailorCanvas(ellipse,50,50)
-    cv.showCanvas(title="after tailor")
+    #ellipse=cv.generateShape("ellipse",50,30)
+    #cv.showShape(ellipse)
+    #cv.prepareBoard()
+    #cv.tailorCanvas(ellipse,50,50)
+    #cv.showCanvas(title="after tailor")
 
     el=Element()
     el.generateRandomElementForTest(cv)
