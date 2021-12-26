@@ -3,9 +3,12 @@ import numpy as np
 import math
 import copy
 from numpy.random import randint
+import sys
+sys.path.append("../d_apyori/")
+import aprioriRule as ar
 
 #the arribute name of class Canvas and class Element shouldn't be same
-
+##TODO class translator:        to connect the data,for convience use the direct temporary
 class ShapeGenerator:
     def __init__(self):
         # the color should be between vacancy and blank
@@ -156,6 +159,7 @@ class Element(ShapeGenerator):
         self.height=None
         self.width=None
         self.shapeName=None
+        self.feature=dict()
         if type=="default":
             pass
         else:
@@ -195,19 +199,32 @@ class Element(ShapeGenerator):
         plt.title(title)
         plt.show()
 
-class Painter(Canvas,Element):
-    def __init__(self,height,width):
+class Position():
+    def __init__(self,y,x,canvas):
+        self.canvas=canvas
+        self.y=y
+        self.x=x
+
+        self.feature=dict()
+
+    def extractFeature(self,feature):
+        if feature=="lineNumber":
+            self.feature["lineNumber"]=self.y/self.canvas.CanvasHeight
+
+class Painter(Canvas,Element,ar.rules):
+    def __init__(self,height,width,allHeaders):
         Element.__init__(self)
         Canvas.__init__(self,height,width)
-        self.paintedElementList=list()
+        ar.rules.__init__(self,allHeaders)
+        self.paintedElement=dict()
         self.waitingPaintList=list()
 
     def getRandomMatKernal(self,element):
         pointList=list()
         retPointList=list()
         #count total pixel number
-        for h in element.height:
-            for w in element.width:
+        for h in range(element.height):
+            for w in range(element.width):
                 if element.mat[h][w] != element.blank:
                     pointList.append((h,w))
         #pickPoint
@@ -219,10 +236,10 @@ class Painter(Canvas,Element):
         return retPointList
 
     def checkIsBlank(self,element,pos):
-        y=pos[0]
-        x=pos[1]
-        for h in element.height:
-            for w in element.width:
+        y=pos.y
+        x=pos.x
+        for h in range(element.height):
+            for w in range(element.width):
                 if element.mat[h][w]!=element.blank:
                     if self.canvas[h+y][w+x]!=self.blank:
                         return False
@@ -231,36 +248,91 @@ class Painter(Canvas,Element):
     def searchPossibleBlank(self,element):
         kernel=self.getRandomMatKernal(element)
         possiblePosition=list()
-        maxHorizonStep=element.height/5
-        maxVerticalStep=element.width/5
+        maxHorizonStep=self.CanvasHeight/3
+        maxVerticalStep=self.CanvasWidth/3
         y=0
-        x=0
         while(y+element.height<self.CanvasHeight):
+            x=0
             while (x+element.width<self.CanvasWidth):
                 flag=True
                 for p in kernel:
                     if self.canvas[y+p[0]][x+p[1]]!=self.blank:
                         flag=False
                 if (flag):
-                    possiblePosition.append((y,x))
-                x+=randint(1,maxHorizonStep)
-            y+=randint(1,maxHorizonStep)
+                    possiblePosition.append(Position(y,x,self))
+                x+=randint(5,maxHorizonStep)
+            y+=randint(5,maxVerticalStep)
         return possiblePosition
 
 
-    def searchRules(self):
-        pass
+    def searchRules(self,feature):
+        self.addRulesFromPickle("rules_LnCv")#"lineNumber" "colorVariety"
+        self.addRulesFromPickle("rules_EdCt")#"embeddedDepth"  "contrast"
+        # for rule in rl.rules:
+        fr = self.searchFeatureLeft(feature)
+        fr = self.sortRules(fr,amount = -1)
+        #print(rl.showFeatureName(rule, allHeaders))
+        return fr
 
-    def comparePosAndRules(self):
-        pass
+    def extractElement(self,element):
+        #colorVariety
+        possibleColor=element.blank - element.vacancy
+        flag=np.zeros(possibleColor)
+        for h in range(element.height):
+            for w in range(element.width):
+                color=element.mat[h][w]
+                if color!=element.blank:
+                    flag[int(color)]=1
+        element.feature["colorVariety"]=sum(flag)/possibleColor
 
+
+    def compareElementAndRules(self,elementFeature,element,posFeature,pos):
+        usefulRules = list()
+        if elementFeature=="colorVariety":
+            rules=self.searchRules(elementFeature)
+            for rule in rules:
+                for v in list(rule[0][0]):
+                    if self.totalHeader[int(v/3)]==elementFeature:
+                        if elementFeature not in element.feature:
+                            self.extractElement(element)
+                        p=abs(v-int(v)-element.feature[elementFeature])
+                        if p<0.5:
+                            if self.comparePosAndRule(posFeature, pos,rule):
+                                if self.checkIsBlank(element, pos):
+                                    return True
+            return False
+
+    def comparePosAndRule(self, posFeature, pos,rule):
+        if posFeature=="lineNumber":
+            for v in list(rule[0][1]):
+                if self.totalHeader[int(v/3)]==posFeature:
+                    if posFeature not in pos.feature:
+                        pos.extractFeature(posFeature)
+                    p=abs(v-int(v)-pos.feature[posFeature])
+                    if p<0.5:
+                        return True
+        return False
+
+    def pushElement(self,element):
+        pb=self.searchPossibleBlank(element)
+        for pos in pb:
+            if self.compareElementAndRules(elementFeature="colorVariety",posFeature="lineNumber",element=element,pos=pos):
+                    self.paintElement(element,pos.y,pos.x)
+                    self.paintedElement[element]=pos
+                    print("good shoot")
+                    return True
+        print("no good space for that element")
+        for pos in pb:
+            if self.checkIsBlank(element,pos):
+                self.paintElement(element,pos.y,pos.x)
+                self.paintedElement[element] = pos
+                return True
+        print("and no spare random space for it,too")
+        return False
+
+    ##TODO make program a pool
     def pushElementIndependence(self,element):
-        blankPos=self.searchPossibleBlank()
-        rules
-
-    def searchBlank(self, element):
         pass
-
     def pushElementAttach(self,element):
         pass
 
@@ -276,17 +348,40 @@ if __name__ == "__main__":
     #plt.matshow(mat,cmap=plt.cm.cubehelix)
     #plt.show()
 
-    cv=Canvas(160,100)
-    cv.generateRandomCanvasForTest()
-    cv.showCanvas()
+    #cv=Canvas(160,100)
+    #cv.generateRandomCanvasForTest()
+    #cv.showCanvas()
     #ellipse=cv.generateShape("ellipse",50,30)
     #cv.showShape(ellipse)
     #cv.prepareBoard()
     #cv.tailorCanvas(ellipse,50,50)
     #cv.showCanvas(title="after tailor")
 
+    #el=Element()
+    #el.generateRandomElementForTest(cv)
+    #el.showElement()
+    #cv.paintElement(el,10,10)
+    #cv.showCanvas(title="after paint")
+
+    allHeaders = ["embeddedDepth", "lineNumber", "imgWidth", "imgHeight", "widthHeightRatio", "red", "green",
+                  "blue", "colorVariety", "contrast", "levelDistanceLowRatio", "levelDistanceHighRatio",
+                  "levelSimiliarDistanceLowRatio", "levelSimiliarDistanceHighRatio", "verticalZeroRatio",
+                  "verticalMinusRatio", "verticalPositiveRatio", "verticalSimiliarZeroRatio",
+                  "verticalSimiliarMinusRatio", "verticalSimiliarPositiveRatio", "horizonDistanceCloserRatio",
+                  "horizonDistanceFatherRatio", "horizonDistanceInFoundLevelCloserRatio",
+                  "horizonDistanceInFoundLevelFatherRatio", "childNumber", "childTagNumber", "siblingNumber",
+                  "siblingTagNumber", "uncleNumber", "uncleTagNumber"]
+    pt=Painter(100,70,allHeaders)
+    pt.generateRandomCanvasForTest()
+    pt.showCanvas(title="canvas")
     el=Element()
-    el.generateRandomElementForTest(cv)
-    el.showElement()
-    cv.paintElement(el,10,10)
-    cv.showCanvas(title="after paint")
+    el.generateRandomElementForTest(pt)
+    el.showElement(title="element")
+    pt.pushElement(el)
+    pt.showCanvas()
+
+    for i in range(10):
+        el.generateRandomElementForTest(pt)
+        el.showElement(title="element")
+        pt.pushElement(el)
+        pt.showCanvas()
