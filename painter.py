@@ -6,7 +6,7 @@ from numpy.random import randint
 import sys
 sys.path.append("../d_apyori/")
 import aprioriRule as ar
-
+from queue import Queue
 #the arribute name of class Canvas and class Element shouldn't be same
 ##TODO class translator:        to connect the data,for convience use the direct temporary
 class ShapeGenerator:
@@ -123,20 +123,25 @@ class Canvas(ShapeGenerator):
                         self.canvas[y + h][x + w] = elementMat[h][w]
         return (y,x)    #return position to Element sample
 
+    def cleanElement(self,element,y,x):
+        elementMat=element.mat
+        hh = elementMat.shape[0]
+        ww = elementMat.shape[1]
+        for h in range(hh):
+            for w in range(ww):
+                if elementMat[h][w] != element.blank  and (y + h) < self.CanvasHeight and (x + w) < self.CanvasWidth:
+                    if self.canvas[y + h][x + w]==self.vacancy:
+                        print("drop into the vacancy")
+                    else:
+                        self.canvas[y + h][x + w] = self.blank
+        return (y,x)    #return position to Element sample
+
     def showCanvas(self,title="canvas"):
         plt.matshow(self.canvas,cmap=self.cmap)
         plt.title(title)
         plt.show()
 
-    def cleanCanvas(self,element):
-        y=element.pos[0]
-        x=element.pos[1]
-        hh = element.shape[0]
-        ww = element.shape[1]
-        for h in range(hh):
-            for w in range(ww):
-                if element[h][w] != self.vacancyPoint and (y + h) < self.CanvasHeight and (x + w) < self.CanvasWidth:
-                    self.canvas[y + h][x + w] = self.blank
+
 
     def generateRandomCanvasForTest(self):
         self.prepareBoard()
@@ -160,6 +165,8 @@ class Element(ShapeGenerator):
         self.width=None
         self.shapeName=None
         self.feature=dict()
+        self.attachElement=None
+        self.attachDistance=None
         if type=="default":
             pass
         else:
@@ -200,7 +207,7 @@ class Element(ShapeGenerator):
         plt.show()
 
 class Position():
-    def __init__(self,y,x,canvas):
+    def __init__(self,y,x,canvas=None):
         self.canvas=canvas
         self.y=y
         self.x=x
@@ -217,7 +224,8 @@ class Painter(Canvas,Element,ar.rules):
         Canvas.__init__(self,height,width)
         ar.rules.__init__(self,allHeaders)
         self.paintedElement=dict()
-        self.waitingPaintList=list()
+        self.waitingPaint=Queue()
+        self.waitingAttach=Queue()
 
     def getRandomMatKernal(self,element):
         pointList=list()
@@ -241,7 +249,10 @@ class Painter(Canvas,Element,ar.rules):
         for h in range(element.height):
             for w in range(element.width):
                 if element.mat[h][w]!=element.blank:
-                    if self.canvas[h+y][w+x]!=self.blank:
+                    try:
+                        if self.canvas[h+y][w+x]!=self.blank:
+                            return False
+                    except Exception:
                         return False
         return True
 
@@ -313,34 +324,86 @@ class Painter(Canvas,Element,ar.rules):
                         return True
         return False
 
-    def pushElement(self,element):
+    def cleanCanvas(self,element):
+        y=element.pos.y
+        x=element.pos.x
+        self.cleanElement(element,y,x)
+        self.paintedElement.pop(element)
+
+    def pushElement(self,element,show=False):
         pb=self.searchPossibleBlank(element)
         for pos in pb:
             if self.compareElementAndRules(elementFeature="colorVariety",posFeature="lineNumber",element=element,pos=pos):
                     self.paintElement(element,pos.y,pos.x)
                     self.paintedElement[element]=pos
                     print("good shoot")
+                    self.pos=pos
+                    if show == True:
+                        self.showCanvas("push independence")
                     return True
         print("no good space for that element")
         for pos in pb:
             if self.checkIsBlank(element,pos):
                 self.paintElement(element,pos.y,pos.x)
                 self.paintedElement[element] = pos
+                self.pos=pos
+                if show==True:
+                    self.showCanvas("push independence")
                 return True
         print("and no spare random space for it,too")
         return False
 
-    ##TODO make program a pool
+    def pushElementAttached(self,element,show=False):
+        y=element.attachDistance.y
+        x=element.attachDistance.x
+        origin=self.paintedElement[element.attachElement]
+        y=y+origin.y
+        x=x+origin.x
+        pos=Position(y,x,self.canvas)
+        if self.checkIsBlank(element,pos):
+            self.paintElement(element,y,x)
+            self.paintedElement[element]=pos
+            if show == True:
+                self.showCanvas("push attach")
+            self.pos=pos
+            return True
+        else:
+            print("attach failed")
+            return False
+
     def pushElementIndependence(self,element):
-        pass
+        self.waitingPaint.put(element)
+
     def pushElementAttach(self,element):
-        pass
+        self.waitingAttach.put(element)
 
-    def getElementFeature(self):
-        pass
 
-    def getPositionFeature(self):
-        pass
+    def working(self):
+        while(True):
+            if (not self.waitingPaint.empty()):
+                element=self.waitingPaint.get()
+                if(not self.pushElement(element,show=True)):
+                    if self.paintedElement != dict():
+                        self.waitingPaint.put(element)
+                        toClean=list(self.paintedElement.keys())[randint(len(self.paintedElement.keys()))]
+                        toClean.pos=self.paintedElement[toClean]
+                        self.cleanCanvas(toClean)
+                        self.showCanvas("independence clean")
+            if(not self.waitingAttach.empty()):
+                element=self.waitingAttach.get()
+                if element.attachElement in self.paintedElement.keys():
+                    if  (not self.pushElementAttached(element,show=True)):
+                        element.attachElement.pos=self.paintedElement[element.attachElement]
+                        self.cleanCanvas(element.attachElement)
+                        self.waitingAttach.put(element)
+                        self.showCanvas("attach clean")
+                elif self.waitingPaint.empty():
+                    pass
+                else:
+                    self.waitingAttach.put(element)
+
+
+
 
 if __name__ == "__main__":
     #mat = np.arange(64*64).reshape(64, 64)
@@ -374,14 +437,35 @@ if __name__ == "__main__":
     pt=Painter(100,70,allHeaders)
     pt.generateRandomCanvasForTest()
     pt.showCanvas(title="canvas")
-    el=Element()
-    el.generateRandomElementForTest(pt)
-    el.showElement(title="element")
-    pt.pushElement(el)
-    pt.showCanvas()
+
+    #el.generateRandomElementForTest(pt)
+    #el.showElement(title="element")
+    #pt.pushElement(el)
+    #pt.showCanvas()
+
+    q=Queue()
+    for i in range(3):
+        el=Element()
+        el2=Element()
+        el.generateRandomElementForTest(pt)
+        #el.showElement(title="element")
+        pt.pushElementIndependence(el)
+        q.put(copy.deepcopy(el))
+        #pt.showCanvas()
+
+        el2.generateRandomElementForTest(pt)
+        #el.showElement(title="element")
+        el2.attachElement=el
+        pos=Position(el.height,0,pt.canvas)
+        el2.attachDistance=pos
+        pt.pushElementAttach(el2)
+
+
 
     for i in range(10):
+        el=Element()
         el.generateRandomElementForTest(pt)
-        el.showElement(title="element")
-        pt.pushElement(el)
-        pt.showCanvas()
+        #el.showElement(title="element")
+        pt.pushElementIndependence(el)
+
+    pt.working()
