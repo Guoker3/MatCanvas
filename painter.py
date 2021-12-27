@@ -136,6 +136,7 @@ class Canvas(ShapeGenerator):
                         self.canvas[y + h][x + w] = self.blank
         return (y,x)    #return position to Element sample
 
+    ##TODO can show canvas in the browser,and can check the history
     def showCanvas(self,title="canvas"):
         plt.matshow(self.canvas,cmap=self.cmap)
         plt.title(title)
