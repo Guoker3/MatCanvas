@@ -78,13 +78,15 @@ class ShapeGenerator:
         plt.show()
 
 class Canvas(ShapeGenerator):
-    def __init__(self,height,width):
+    def __init__(self,height,width,ID=-1):
         ShapeGenerator.__init__(self)
         self.CanvasWidth=width
         self.CanvasHeight=height
         self.basemat=None
         self.canvas=None
         self.clean=None
+        self.canvasTid=0
+        self.ID=ID
         #self.remain balnk
 
     #generator the max cubic storage mat
@@ -136,10 +138,11 @@ class Canvas(ShapeGenerator):
                         self.canvas[y + h][x + w] = self.blank
         return (y,x)    #return position to Element sample
 
-    ##TODO can show canvas in the browser,and can check the history
     def showCanvas(self,title="canvas"):
         plt.matshow(self.canvas,cmap=self.cmap)
         plt.title(title)
+        plt.savefig("../save/"+str(self.ID)+"_"+str(self.canvasTid)+"_"+"Canvas.png")
+        self.canvasTid+=1
         plt.show()
 
 
@@ -151,6 +154,11 @@ class Canvas(ShapeGenerator):
             shapeName = shapes[randint(len(shapes))]
             dig = self.generateShape(shapeName, randint(self.CanvasHeight/6,self.CanvasHeight/3), randint(self.CanvasWidth/6,self.CanvasWidth/3))
             self.tailorCanvas(dig, randint(self.CanvasHeight/2),randint(self.CanvasWidth/2))
+        for i in range(randint(1,2)):
+            shapeName = shapes[randint(len(shapes))]
+            dig = self.generateShape(shapeName, randint(self.CanvasHeight / 3, self.CanvasHeight / 1.5),
+                                     randint(self.CanvasWidth / 3, self.CanvasWidth / 1.5))
+            self.tailorCanvas(dig, randint(self.CanvasHeight/2,self.CanvasHeight/1.5), randint(self.CanvasWidth/2,self.CanvasWidth/1.5 ))
 
 
 class Element(ShapeGenerator):
@@ -220,9 +228,9 @@ class Position():
             self.feature["lineNumber"]=self.y/self.canvas.CanvasHeight
 
 class Painter(Canvas,Element,ar.rules):
-    def __init__(self,height,width,allHeaders):
+    def __init__(self,height,width,allHeaders,ID=-1):
         Element.__init__(self)
-        Canvas.__init__(self,height,width)
+        Canvas.__init__(self,height,width,ID)
         ar.rules.__init__(self,allHeaders)
         self.paintedElement=dict()
         self.waitingPaint=Queue()
@@ -402,6 +410,12 @@ class Painter(Canvas,Element,ar.rules):
                     pass
                 else:
                     self.waitingAttach.put(element)
+            if (self.waitingPaint.empty() and self.waitingAttach.empty()):
+                print("all done")
+                inp=input()
+                if inp =="quit":
+                    print("exist")
+                    break
 
 
 
